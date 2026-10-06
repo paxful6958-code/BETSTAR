@@ -96,53 +96,6 @@
             flex-shrink: 0;
         }
         
-        .signal-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        
-        .signal-btn {
-            background: #ff0000;
-            color: #fff;
-            border: none;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-            text-transform: uppercase;
-            white-space: nowrap;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(255, 0, 0, 0.4);
-        }
-        
-        .signal-btn:disabled {
-            background: #4a4a4a !important;
-            color: #888888 !important;
-            cursor: not-allowed;
-            box-shadow: none !important;
-            opacity: 0.7;
-        }
-        
-        .prediction-display {
-            background: #141518;
-            border: 1px solid #26282e;
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-size: 12px;
-            font-weight: 800;
-            color: #00e676;
-            white-space: nowrap;
-            min-width: 55px;
-            text-align: center;
-        }
-        
-        .prediction-display.cooldown {
-            color: #ff9800;
-            font-size: 11px;
-        }
-        
         .refer-btn {
             background: #ffd700;
             color: #000;
@@ -948,10 +901,6 @@
         </svg>
                 </a>
                 <img src="https://i.ibb.co/5WS8kMsY/4-F05-AFF4-AFC8-4-B60-9-F59-086-D08-FA8723.png" alt="BetRush Logo" class="main-logo-top">
-                <div class="signal-wrapper">
-                    <button class="signal-btn" id="nextSignalBtn" onclick="handleSignalClick()" disabled>Next Signal</button>
-                    <div class="prediction-display" id="predictionDisplay">---</div>
-                </div>
             </div>
             <button class="refer-btn" onclick="openReferralModal()">Refer</button>
         </div>
@@ -1165,22 +1114,6 @@
         </div>
     </div>
 
-    <!-- Timer Active Referral Notice Modal -->
-    <div class="popup-modal" id="timerNoticeModal">
-        <div class="popup-box">
-            <div class="modal-close-x" onclick="closeModal('timerNoticeModal')">✕</div>
-            <div class="modal-icon-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polyline points="12 6 12 16 14"></polyline>
-      </svg>
-            </div>
-            <div class="popup-title">Timer Active</div>
-            <div class="popup-text" style="text-align: center;">Refer friends to remove the timer delay and unlock instant signals!</div>
-            <button class="deposit-btn" style="background: linear-gradient(180deg, #ffd700, #e6c200); color: #000;" onclick="closeModal('timerNoticeModal'); openReferralModal();">Refer Friends Now</button>
-        </div>
-    </div>
-
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1226,12 +1159,11 @@
             }
         }
 
-        /* Auto-send: checks every second; fires once per round
-           as soon as the new round's waiting phase begins. */
+        /* Auto-send: fires once per round as soon as the new
+           round's waiting phase begins. No button needed. */
         setInterval(() => {
             if (!AUTO_SIGNAL_ENABLED) return;
             if (gameState !== STATES.WAITING) return;
-            if (isCooldown) return;
             if (TELEGRAM_BOT_TOKEN.includes("PASTE_")) return; // not configured yet
 
             const round = getCurrentClockRound();
@@ -1239,8 +1171,6 @@
             lastSentRound = round;
 
             const signal = getClockCrashPoint(round).toFixed(2) + "x";
-            predictionDisplay.innerText = signal;
-            predictionDisplay.classList.remove('cooldown');
             sendTelegramSignal(signal);
         }, 1000);
 
@@ -1640,13 +1570,6 @@
         let maxRoundPlayers = 7;
         let currentTotalWin = 0.00;
 
-        // Signal Prediction Timer State
-        let freeSignalsRemaining = 5;
-        let isCooldown = false;
-        let cooldownTimer = null;
-        let cooldownEndTime = 0;
-        let pendingCooldownAfterRound = false;
-
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const container = document.getElementById('canvasContainer');
@@ -1661,8 +1584,6 @@
         const totalBetsStatEl = document.getElementById('totalBetsStat');
         const totalWinStatEl = document.getElementById('totalWinStat');
         const betsProgressFill = document.getElementById('betsProgressFill');
-        const nextSignalBtn = document.getElementById('nextSignalBtn');
-        const predictionDisplay = document.getElementById('predictionDisplay');
 
         let flyAwayActive = false;
         let flyAwayStart = 0;
@@ -1719,18 +1640,6 @@
             currentPlayers = Math.max(7, currentPlayers);
             maxRoundPlayers = currentPlayers;
 
-            if (!isCooldown) {
-                // Don't reset the display here — the auto-sender
-                // fills it with the new round's signal.
-            }
-
-            if (pendingCooldownAfterRound) {
-                pendingCooldownAfterRound = false;
-                startCooldownTimer(15 * 60);
-            }
-
-            updateSignalButtonState();
-
             waitingOverlay.style.display = 'flex';
             overlayContainer.style.display = 'none';
             waitingText.innerText = "";
@@ -1754,7 +1663,6 @@
 
         function startFlightPhase() {
             gameState = STATES.FLYING;
-            updateSignalButtonState();
 
             let roundIndex = getCurrentClockRound();
             crashPoint = getClockCrashPoint(roundIndex);
@@ -1770,62 +1678,6 @@
 
             maxRoundPlayers = currentPlayers;
             requestAnimationFrame(gameLoop);
-        }
-
-        function updateSignalButtonState() {
-            nextSignalBtn.disabled = (gameState !== STATES.WAITING);
-        }
-
-        function handleSignalClick() {
-            // Manual click is no longer required — the signal is
-            // sent automatically every round. Kept for compatibility.
-            if (isCooldown) {
-                document.getElementById('timerNoticeModal').style.display = 'flex';
-                return;
-            }
-            lastSentRound = null; // force re-send for current round
-        }
-
-        function fetchNextSignal() {
-            // Kept for compatibility; auto-sender handles this now.
-            if (gameState !== STATES.WAITING || isCooldown) return;
-
-            let nextRound = getCurrentClockRound();
-            let exactNextCrash = getClockCrashPoint(nextRound);
-            predictionDisplay.innerText = exactNextCrash.toFixed(2) + "x";
-            predictionDisplay.classList.remove('cooldown');
-            sendTelegramSignal(exactNextCrash.toFixed(2) + "x");
-
-            if (freeSignalsRemaining > 0) {
-                freeSignalsRemaining--;
-                if (freeSignalsRemaining === 0) {
-                    pendingCooldownAfterRound = true;
-                }
-            }
-        }
-
-        function startCooldownTimer(seconds) {
-            isCooldown = true;
-            cooldownEndTime = Date.now() + seconds * 1000;
-            updateSignalButtonState();
-
-            if (cooldownTimer) clearInterval(cooldownTimer);
-            cooldownTimer = setInterval(() => {
-                let remaining = Math.ceil((cooldownEndTime - Date.now()) / 1000);
-                if (remaining <= 0) {
-                    clearInterval(cooldownTimer);
-                    isCooldown = false;
-                    predictionDisplay.innerText = "---";
-                    predictionDisplay.classList.remove('cooldown');
-                    updateSignalButtonState();
-                } else {
-                    let mins = Math.floor(remaining / 60);
-                    let secs = remaining % 60;
-                    let timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-                    predictionDisplay.innerText = timeStr;
-                    predictionDisplay.classList.add('cooldown');
-                }
-            }, 1000);
         }
 
         function gameLoop(time) {
@@ -1855,7 +1707,6 @@
 
         function triggerCrash(time) {
             gameState = STATES.CRASHED;
-            updateSignalButtonState();
             flyAwayActive = true;
             flyAwayStart = time;
             flyAwayMult = currentMultiplier;
