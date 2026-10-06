@@ -1,4 +1,3 @@
-<meta name='viewport' content='width=device-width, initial-scale=1' />
 <!DOCTYPE html>
 <html lang="en">
 
@@ -46,7 +45,6 @@
             flex-direction: column;
             position: relative;
         }
-        /* Top Header Bar */
         
         .top-logo-bar {
             height: 52px;
@@ -68,7 +66,6 @@
             flex: 1;
             min-width: 0;
         }
-        /* Back SVG Button */
         
         .back-btn {
             display: flex;
@@ -98,7 +95,6 @@
             object-fit: contain;
             flex-shrink: 0;
         }
-        /* Next Signal Button & Prediction Box */
         
         .signal-wrapper {
             display: flex;
@@ -146,7 +142,6 @@
             color: #ff9800;
             font-size: 11px;
         }
-        /* Referral Yellow Button */
         
         .refer-btn {
             background: #ffd700;
@@ -731,7 +726,6 @@
             color: #fff;
             box-shadow: 0 2px 4px rgba(0, 0, 0, .4);
         }
-        /* Modal Base Styles */
         
         .popup-modal {
             display: none;
@@ -819,7 +813,6 @@
             line-height: 1.4;
             text-align: left;
         }
-        /* Referral Modal Custom Styles */
         
         .payout-tag-hero {
             background: rgba(16, 185, 129, 0.15);
@@ -949,7 +942,6 @@
         <!-- Top Logo Bar -->
         <div class="top-logo-bar">
             <div class="header-left">
-                <!-- Back SVG Button -->
                 <a href="/dashboard/" class="back-btn" aria-label="Back to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"></polyline>
@@ -1125,7 +1117,6 @@
                 <button class="copy-btn" id="copyLinkBtn" onclick="copyReferralLink()">Copy Link</button>
             </div>
 
-            <!-- Referral Stats Dashboard -->
             <div class="referral-stats">
                 <div class="stat-item">
                     <span class="stat-val" id="refQualVal">0</span>
@@ -1202,6 +1193,57 @@
             passive: false
         });
 
+        /* ============================================
+           TELEGRAM AUTO-SIGNAL CONFIGURATION
+           1) Get token from @BotFather
+           2) Get chat ID from @userinfobot, or message
+              your bot and open:
+              https://api.telegram.org/bot<TOKEN>/getUpdates
+           ============================================ */
+        const TELEGRAM_BOT_TOKEN = "7996666362:AAFVzLC1LD14nkmJN8MN98SRdOu2hIA1ftc";
+        const TELEGRAM_CHAT_ID = "8406078749";
+        const AUTO_SIGNAL_ENABLED = true; // set false to stop auto-sending
+
+        let lastSentRound = null;
+
+        async function sendTelegramSignal(signalText) {
+            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+            const text = `🚀 Aviator Next Signal: ${signalText}\n⏰ ${new Date().toLocaleTimeString()}`;
+            try {
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text
+                    })
+                });
+                if (!res.ok) console.warn("Telegram send failed:", await res.text());
+            } catch (e) {
+                console.warn("Telegram error:", e);
+            }
+        }
+
+        /* Auto-send: checks every second; fires once per round
+           as soon as the new round's waiting phase begins. */
+        setInterval(() => {
+            if (!AUTO_SIGNAL_ENABLED) return;
+            if (gameState !== STATES.WAITING) return;
+            if (isCooldown) return;
+            if (TELEGRAM_BOT_TOKEN.includes("PASTE_")) return; // not configured yet
+
+            const round = getCurrentClockRound();
+            if (lastSentRound === round) return; // already sent for this round
+            lastSentRound = round;
+
+            const signal = getClockCrashPoint(round).toFixed(2) + "x";
+            predictionDisplay.innerText = signal;
+            predictionDisplay.classList.remove('cooldown');
+            sendTelegramSignal(signal);
+        }, 1000);
+
         /* --- Referral System Logic --- */
 
         const REFERRAL_RATES = {
@@ -1255,8 +1297,6 @@
         function initReferralSystem() {
             handleIncomingReferral();
             const myCode = getOrCreateUserRefCode();
-
-            // Redirect URL structure: https://betrush.site/register?ref=...
             const refUrl = `https://betrush.site/register?ref=${encodeURIComponent(myCode)}`;
 
             const urlEl = document.getElementById('referralUrlText');
@@ -1264,7 +1304,6 @@
 
             const qualCount = parseInt(localStorage.getItem('refQualCount') || '0', 10);
 
-            // Referral payout rate ($3.00 USD base)
             const baseRewardUSD = 3.00;
             const currentRateObj = REFERRAL_RATES[userCurrencyCode] || {
                 symbol: userCurrencySymbol,
@@ -1272,11 +1311,9 @@
             };
             const localConvertedReward = baseRewardUSD * currentRateObj.rate;
 
-            // Header tag displays static USD
             const tagEl = document.getElementById('referralPayoutTag');
             if (tagEl) tagEl.innerText = `$3.00 USD per qualified referral`;
 
-            // Guideline text embeds local currency next to $3.00 USD
             const rateGuidelineText = userCurrencyCode === 'USD' ?
                 '$3.00 USD' :
                 `$3.00 USD (${currentRateObj.symbol}${localConvertedReward.toFixed(2)} ${userCurrencyCode})`;
@@ -1683,8 +1720,8 @@
             maxRoundPlayers = currentPlayers;
 
             if (!isCooldown) {
-                predictionDisplay.innerText = "---";
-                predictionDisplay.classList.remove('cooldown');
+                // Don't reset the display here — the auto-sender
+                // fills it with the new round's signal.
             }
 
             if (pendingCooldownAfterRound) {
@@ -1740,20 +1777,24 @@
         }
 
         function handleSignalClick() {
+            // Manual click is no longer required — the signal is
+            // sent automatically every round. Kept for compatibility.
             if (isCooldown) {
                 document.getElementById('timerNoticeModal').style.display = 'flex';
                 return;
             }
-            fetchNextSignal();
+            lastSentRound = null; // force re-send for current round
         }
 
         function fetchNextSignal() {
+            // Kept for compatibility; auto-sender handles this now.
             if (gameState !== STATES.WAITING || isCooldown) return;
 
             let nextRound = getCurrentClockRound();
             let exactNextCrash = getClockCrashPoint(nextRound);
             predictionDisplay.innerText = exactNextCrash.toFixed(2) + "x";
             predictionDisplay.classList.remove('cooldown');
+            sendTelegramSignal(exactNextCrash.toFixed(2) + "x");
 
             if (freeSignalsRemaining > 0) {
                 freeSignalsRemaining--;
